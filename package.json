@@ -1,0 +1,148 @@
+{
+    "name": "kratix-promise-explorer",
+    "displayName": "Kratix Promises Explorer",
+    "description": "A VS Code extension with a side panel to list Kratix promises in the current kubectl context and show their instances.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.101.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "kratixPromiseExplorerContainer",
+                    "title": "Kratix Promises",
+                    "icon": "media/kratix.svg"
+                }
+            ]
+        },
+        "views": {
+            "kratixPromiseExplorerContainer": [
+                {
+                    "id": "kratixPromiseExplorer",
+                    "name": "Kratix Promises"
+                },
+                {
+                    "id": "kratixInstancesExplorer",
+                    "name": "Instances"
+                },
+                {
+                    "id": "kratixInstanceStatusExplorer",
+                    "name": "Instance Status"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "kratix-promise-explorer.helloWorld",
+                "title": "Hello World"
+            },
+            {
+                "command": "kratixPromiseExplorer.refresh",
+                "title": "Refresh Kratix Promises"
+            },
+            {
+                "command": "kratixPromiseExplorer.selectContext",
+                "title": "Select kubectl Context"
+            },
+            {
+                "command": "kratixPromiseExplorer.openPromiseEditor",
+                "title": "Edit..."
+            },
+            {
+                "command": "kratixPromiseExplorer.openInstanceEditor",
+                "title": "Edit..."
+            },
+            {
+                "command": "kratixPromiseExplorer.applyPromiseYaml",
+                "title": "Apply changes to cluster"
+            },
+            {
+                "command": "kratixInstancesExplorer.refresh",
+                "title": "Refresh Instances"
+            },
+            {
+                "command": "kratixPromiseExplorer.createInstance",
+                "title": "Create Instance"
+            },
+            {
+                "command": "kratixInstanceStatusExplorer.copyStatus",
+                "title": "Copy"
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "kratixPromiseExplorer.refresh",
+                    "when": "view == kratixPromiseExplorer",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "kratixInstancesExplorer.refresh",
+                    "title": "Refresh Instances",
+                    "icon": "refresh",
+                    "when": "view == kratixInstancesExplorer",
+                    "group": "navigation@1"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "kratixPromiseExplorer.openPromiseEditor",
+                    "when": "view == kratixPromiseExplorer && viewItem == promise",
+                    "group": "inline"
+                },
+                {
+                    "command": "kratixPromiseExplorer.openInstanceEditor",
+                    "title": "Edit...",
+                    "when": "view == kratixInstancesExplorer && viewItem == instance",
+                    "group": "inline"
+                },
+                {
+                    "command": "kratixPromiseExplorer.createInstance",
+                    "when": "view == kratixPromiseExplorer && viewItem == promise",
+                    "icon": "add",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "kratixInstanceStatusExplorer.copyStatus",
+                    "when": "view == kratixInstanceStatusExplorer && viewItem =~ /instanceStatus.*/",
+                    "group": "inline"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "compile": "webpack",
+        "watch": "webpack --watch",
+        "package": "webpack --mode production --devtool hidden-source-map",
+        "compile-tests": "tsc -p . --outDir out",
+        "watch-tests": "tsc -p . -w --outDir out",
+        "pretest": "npm run compile-tests && npm run compile && npm run lint",
+        "lint": "eslint src",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/js-yaml": "^4.0.9",
+        "@types/mocha": "^10.0.10",
+        "@types/node": "20.x",
+        "@types/vscode": "^1.101.0",
+        "@typescript-eslint/eslint-plugin": "^8.31.1",
+        "@typescript-eslint/parser": "^8.31.1",
+        "@vscode/test-cli": "^0.0.10",
+        "@vscode/test-electron": "^2.5.2",
+        "eslint": "^9.25.1",
+        "ts-loader": "^9.5.2",
+        "typescript": "^5.8.3",
+        "webpack": "^5.99.7",
+        "webpack-cli": "^6.0.1"
+    },
+    "dependencies": {
+        "js-yaml": "^4.1.0"
+    }
+}
