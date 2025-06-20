@@ -1,9 +1,10 @@
 {
     "name": "kratix-promise-explorer",
     "displayName": "Kratix Promises Explorer",
+    "icon": "icon.png",
     "description": "A VS Code extension with a side panel to list Kratix promises in the current kubectl context and show their instances.",
     "version": "0.0.1",
-    "publisher": "kratix",
+    "publisher": "JohnIskander",
     "engines": {
         "vscode": "^1.101.0"
     },
