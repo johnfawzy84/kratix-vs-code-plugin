@@ -130,7 +130,7 @@ export class KratixPromiseProvider implements vscode.TreeDataProvider<PromiseTre
         return this.instances[promise] || [];
     }
 
-    async fetchInstancesForPromise(promise: string): Promise<string[]> {
+    async fetchInstancesForPromise(promise: string): Promise<{ name: string, namespace: string }[]> {
         return new Promise((resolve) => {
             const ctx = this.context ? `--context ${this.context}` : '';
             // First, fetch the promise object to get the CRD info
@@ -150,12 +150,20 @@ export class KratixPromiseProvider implements vscode.TreeDataProvider<PromiseTre
                     const plural = apiSpec.names.plural;
                     const resourceType = `${plural}.${group}`;
                     this.resourceTypes[promise] = resourceType;
-                    // Use the correct resource type: plural.group
-                    logAndExec(`kubectl ${ctx} get ${resourceType} -o jsonpath="{.items[*].metadata.name}"`, LARGE_BUFFER, (err2: any, stdout2: string) => {
+                    // Fetch all instances in all namespaces
+                    logAndExec(`kubectl ${ctx} get ${resourceType} --all-namespaces -o json`, LARGE_BUFFER, (err2: any, stdout2: string) => {
                         if (!err2) {
-                            const instances = stdout2.trim().split(/\s+/).filter(Boolean);
-                            this.instances[promise] = instances;
-                            resolve(instances);
+                            try {
+                                const data = JSON.parse(stdout2);
+                                const instances = (data.items || []).map((item: any) => ({
+                                    name: item.metadata.name,
+                                    namespace: item.metadata.namespace
+                                }));
+                                this.instances[promise] = instances;
+                                resolve(instances);
+                            } catch (e) {
+                                resolve([]);
+                            }
                         } else {
                             resolve([]);
                         }

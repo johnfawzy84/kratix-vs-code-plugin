@@ -15,13 +15,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Register all commands ONCE at the top level
     console.log('[Kratix] Registering kratixPromiseExplorer.applyPromiseYaml command');
     context.subscriptions.push(
-        vscode.commands.registerCommand('kratixPromiseExplorer.applyPromiseYaml', async () => {
+        vscode.commands.registerCommand('kratixPromiseExplorer.applyPromiseYaml', async (args?: { mode?: 'create' | 'edit' }) => {
             if (vscode.window.activeTextEditor) {
                 const text = vscode.window.activeTextEditor.document.getText();
                 const tmp = require('os').tmpdir() + `/kratix-edit-${Date.now()}.yaml`;
                 const fs = require('fs');
                 fs.writeFileSync(tmp, text);
-                let useApply = true;
+                let mode = args && args.mode ? args.mode : 'edit';
+                let useApply = mode === 'create';
                 let resourceKind = '';
                 let resourceName = '';
                 let resourceNamespace = '';
@@ -32,31 +33,38 @@ export function activate(context: vscode.ExtensionContext) {
                     resourceName = doc && doc.metadata && doc.metadata.name ? doc.metadata.name : '';
                     resourceNamespace = doc && doc.metadata && doc.metadata.namespace ? doc.metadata.namespace : '';
                     const annotations = doc && doc.metadata && doc.metadata.annotations ? doc.metadata.annotations : {};
-                    if (!annotations['kubectl.kubernetes.io/last-applied-configuration']) {
-                        useApply = false;
+                    if (!useApply && !annotations['kubectl.kubernetes.io/last-applied-configuration']) {
+                        useApply = true;
                     }
                 } catch (e) {
-                    // If parsing fails, fallback to apply
                     useApply = true;
                 }
                 const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
-                const command = useApply
-                    ? `kubectl ${ctx} apply -f ${tmp}`
-                    : `kubectl ${ctx} replace -f ${tmp}`;
-                vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Applying changes to cluster` }, async () => {
-                    return new Promise<void>((resolve) => {
+                async function runKubectl(command: string): Promise<{ err: any, stdout: string, stderr: string }> {
+                    return new Promise(resolve => {
                         logAndExec(command, LARGE_BUFFER, (err, stdout, stderr) => {
-                            if (err) {
-                                vscode.window.showErrorMessage(`Failed to apply changes: ${stderr || err.message}`);
-                            } else {
-                                vscode.window.showInformationMessage(`Resource updated successfully.`);
-                                kratixProvider.refresh();
-                                vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-                            }
-                            fs.unlinkSync(tmp);
-                            resolve();
+                            resolve({ err, stdout, stderr });
                         });
                     });
+                }
+                vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Applying changes to cluster` }, async () => {
+                    let command = useApply
+                        ? `kubectl ${ctx} apply -f ${tmp}`
+                        : `kubectl ${ctx} replace -f ${tmp}`;
+                    let { err, stdout, stderr } = await runKubectl(command);
+                    if (err && !useApply && stderr && stderr.includes('NotFound')) {
+                        // fallback to apply if replace fails with NotFound
+                        command = `kubectl ${ctx} apply -f ${tmp}`;
+                        ({ err, stdout, stderr } = await runKubectl(command));
+                    }
+                    if (err) {
+                        vscode.window.showErrorMessage(`Failed to apply changes: ${stderr || err.message}`);
+                    } else {
+                        vscode.window.showInformationMessage(`Resource updated successfully.`);
+                        kratixProvider.refresh();
+                        vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                    }
+                    fs.unlinkSync(tmp);
                 });
             }
         })
@@ -123,7 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
                                     title: 'Apply changes to cluster',
                                     command: applyCommand,
-                                    arguments: []
+                                    arguments: [{ mode: 'edit' }]
                                 })
                             ];
                         }
@@ -151,13 +159,15 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             const name = instance.label;
+            const namespace = instance.description;
             const resourceType = kratixProvider.getResourceTypeForPromise(parentPromise);
             if (!resourceType) {
                 vscode.window.showErrorMessage('Resource type for this promise could not be determined.');
                 return;
             }
+            const nsArg = namespace ? `-n ${namespace}` : '';
             const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
-            logAndExec(`kubectl ${ctx} get ${resourceType} ${name} -o yaml`, LARGE_BUFFER, async (err, stdout) => {
+            logAndExec(`kubectl ${ctx} get ${resourceType} ${name} ${nsArg} -o yaml`, LARGE_BUFFER, async (err, stdout) => {
                 let yaml = '';
                 if (!err) {
                     yaml = stdout;
@@ -176,7 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
                                     title: 'Apply changes to cluster',
                                     command: applyCommand,
-                                    arguments: []
+                                    arguments: [{ mode: 'edit' }]
                                 })
                             ];
                         }
@@ -230,8 +240,11 @@ export function activate(context: vscode.ExtensionContext) {
                     instanceStatusProvider.clear();
                     return;
                 }
+                const name = selected.label;
+                const namespace = selected.description;
+                const nsArg = namespace ? `-n ${namespace}` : '';
                 const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
-                logAndExec(`kubectl ${ctx} describe ${resourceType} ${selected.label}`, LARGE_BUFFER, (err, stdout) => {
+                logAndExec(`kubectl ${ctx} describe ${resourceType} ${name} ${nsArg}`, LARGE_BUFFER, (err, stdout) => {
                     if (!err) {
                         instanceStatusProvider.setDescribeText(stdout);
                     } else {
@@ -259,8 +272,11 @@ export function activate(context: vscode.ExtensionContext) {
                     instanceStatusProvider.clear();
                     return;
                 }
+                const name = selected.label;
+                const namespace = selected.description;
+                const nsArg = namespace ? `-n ${namespace}` : '';
                 const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
-                logAndExec(`kubectl ${ctx} describe ${resourceType} ${selected.label}`, LARGE_BUFFER, (err, stdout) => {
+                logAndExec(`kubectl ${ctx} describe ${resourceType} ${name} ${nsArg}`, LARGE_BUFFER, (err, stdout) => {
                     if (!err) {
                         instanceStatusProvider.setDescribeText(stdout);
                     } else {
@@ -323,7 +339,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 new vscode.CodeLens(new vscode.Range(0, 0, 0, 0), {
                                     title: 'Apply to cluster',
                                     command: applyCommand,
-                                    arguments: []
+                                    arguments: [{ mode: 'create' }]
                                 })
                             ];
                         }
@@ -357,8 +373,10 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
             const name = instance.label;
+            const namespace = instance.description;
             const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
-            logAndExec(`kubectl ${ctx} get ${parentPromise} ${name} -o json`, LARGE_BUFFER, async (err, stdout) => {
+            const nsArg = namespace ? `-n ${namespace}` : '';
+            logAndExec(`kubectl ${ctx} get ${parentPromise} ${name} ${nsArg} -o json`, LARGE_BUFFER, async (err, stdout) => {
                 if (err) {
                     vscode.window.showErrorMessage(`Failed to fetch instance status: ${err.message}`);
                     return;
@@ -397,6 +415,64 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage('Copied to clipboard!');
             } else {
                 vscode.window.showWarningMessage('Nothing to copy.');
+            }
+        })
+    );
+
+    // Register delete command for promises
+    context.subscriptions.push(
+        vscode.commands.registerCommand('kratixPromiseExplorer.deletePromise', async (promise: string | PromiseTreeItem) => {
+            const name = typeof promise === 'string' ? promise : promise.label;
+            const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
+            const confirm = await vscode.window.showWarningMessage(`Are you sure you want to delete promise '${name}'?`, { modal: true }, 'Delete');
+            if (confirm === 'Delete') {
+                const cmd = `kubectl ${ctx} delete promise ${name}`;
+                kratixOutputChannel.appendLine(`[deletePromise] $ ${cmd}`);
+                logAndExec(cmd, LARGE_BUFFER, (err, stdout, stderr) => {
+                    kratixOutputChannel.appendLine(stdout || '');
+                    kratixOutputChannel.appendLine(stderr || '');
+                    if (err) {
+                        vscode.window.showErrorMessage(`Failed to delete promise: ${stderr || err.message}`);
+                    } else {
+                        vscode.window.showInformationMessage(`Promise '${name}' deleted.`);
+                        kratixProvider.refresh();
+                    }
+                });
+            }
+        })
+    );
+
+    // Register delete command for instances
+    context.subscriptions.push(
+        vscode.commands.registerCommand('kratixPromiseExplorer.deleteInstance', async (instance: vscode.TreeItem) => {
+            const parentPromise = instancesProvider.getParentPromise();
+            if (!parentPromise) {
+                vscode.window.showErrorMessage('Parent promise not found for this instance.');
+                return;
+            }
+            const name = instance.label;
+            const namespace = instance.description;
+            const resourceType = kratixProvider.getResourceTypeForPromise(parentPromise);
+            if (!resourceType) {
+                vscode.window.showErrorMessage('Resource type for this promise could not be determined.');
+                return;
+            }
+            const nsArg = namespace ? `-n ${namespace}` : '';
+            const ctx = kratixProvider.getCurrentContext() ? `--context ${kratixProvider.getCurrentContext()}` : '';
+            const confirm = await vscode.window.showWarningMessage(`Are you sure you want to delete instance '${name}' in namespace '${namespace}'?`, { modal: true }, 'Delete');
+            if (confirm === 'Delete') {
+                const cmd = `kubectl ${ctx} delete ${resourceType} ${name} ${nsArg}`;
+                kratixOutputChannel.appendLine(`[deleteInstance] $ ${cmd}`);
+                logAndExec(cmd, LARGE_BUFFER, (err, stdout, stderr) => {
+                    kratixOutputChannel.appendLine(stdout || '');
+                    kratixOutputChannel.appendLine(stderr || '');
+                    if (err) {
+                        vscode.window.showErrorMessage(`Failed to delete instance: ${stderr || err.message}`);
+                    } else {
+                        vscode.window.showInformationMessage(`Instance '${name}' in namespace '${namespace}' deleted.`);
+                        vscode.commands.executeCommand('kratixInstancesExplorer.refresh');
+                    }
+                });
             }
         })
     );
