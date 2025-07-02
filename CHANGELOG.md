@@ -3,8 +3,11 @@
 All notable changes to the "kratix-promise-explorer" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.4]
 
-## [Unreleased]
+- fix support to earlier VS code versions [Issue-3](https://github.com/johnfawzy84/kratix-vs-code-plugin/issues/3)
+
+## [0.0.3]
 
 - Refactored extension into modular files: kratixPromiseProvider.ts, kratixInstancesProvider.ts, kratixInstanceStatusProvider.ts, kratixCommon.ts
 - Improved context menu logic and command registration
