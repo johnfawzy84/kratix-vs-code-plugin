@@ -5,7 +5,7 @@
 > **Your Favorite Platform Engineering Orchestrator in VS Code!**
 
 ---
-
+![Kratix Demo](kratixdemo.gif)
 ## 🎉 Features
 
 - 🌱 **Browse all Kratix Promises** in your cluster
